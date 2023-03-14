@@ -217,22 +217,21 @@ class Tangle:
                 if edge.type() == EdgeType.upper_hook:
                     if node == edge.e1:
                         node.polarity = Polarity(Sign.negative, neg_counter)
-                        neg_counter += 1
                     else:
                         node.polarity = Polarity(Sign.positive, pos_counter)
-                        pos_counter += 1
                 elif edge.type() == EdgeType.lower_hook:
                     if node == edge.e1:
                         node.polarity = Polarity(Sign.positive, pos_counter)
-                        pos_counter += 1
                     else:
                         node.polarity = Polarity(Sign.negative, neg_counter)
-                        neg_counter += 1
                 elif edge.type() == EdgeType.positive_transversal:
                     node.polarity = Polarity(Sign.positive, pos_counter)
-                    pos_counter += 1
                 elif edge.type() == EdgeType.negative_transversal:
                     node.polarity = Polarity(Sign.negative, neg_counter)
+                
+                if node.polarity.sign == Sign.positive:
+                    pos_counter += 1
+                else:
                     neg_counter += 1
                 
                 if node.polarity not in self.polarities:
