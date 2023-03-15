@@ -102,8 +102,8 @@ class Edge:
             return EdgeType.lower_hook
 
         diff = self.e1 - self.e2
-        if diff > 0: return EdgeType.negative_transversal
-        if diff < 0: return EdgeType.positive_transversal
+        if diff < 0: return EdgeType.negative_transversal
+        if diff > 0: return EdgeType.positive_transversal
         if diff == 0: return EdgeType.zero_transversal
 
     def is_hook(self) -> bool:
@@ -217,19 +217,21 @@ class Tangle:
                 edge, _ = self.node_to_edge[node]
                 if edge.is_generated_only_by_Ts(): continue
 
-                if edge.type() == EdgeType.upper_hook:
+                edge_type = edge.type()
+
+                if edge_type == EdgeType.upper_hook:
                     if node == edge.e1:
                         node.polarity = Polarity(Sign.negative, neg_counter)
                     else:
                         node.polarity = Polarity(Sign.positive, pos_counter)
-                elif edge.type() == EdgeType.lower_hook:
+                elif edge_type == EdgeType.lower_hook:
                     if node == edge.e1:
                         node.polarity = Polarity(Sign.positive, pos_counter)
                     else:
                         node.polarity = Polarity(Sign.negative, neg_counter)
-                elif edge.type() == EdgeType.positive_transversal:
+                elif edge_type == EdgeType.positive_transversal:
                     node.polarity = Polarity(Sign.positive, pos_counter)
-                elif edge.type() == EdgeType.negative_transversal:
+                elif edge_type == EdgeType.negative_transversal:
                     node.polarity = Polarity(Sign.negative, neg_counter)
                 
                 if node.polarity.sign == Sign.positive:
@@ -263,9 +265,9 @@ class Tangle:
     def n_crossings(self) -> int:
         if not self.are_edge_crossings_computed:
             self.compute_edge_crossings()
-            
+
         double_n_crossings = 0
-        for _, other_crossings in self.crossings:
+        for _, other_crossings in self.crossings.items():
             double_n_crossings += len(other_crossings)
         
         return double_n_crossings // 2
@@ -387,14 +389,18 @@ class Tangle:
         
         return str(edge_list)
 
+def length(tangle: Tangle) -> int:
+    return tangle.tfy().n_crossings()
+
 def factorize(tangle : Tangle) -> list:
-    pass
+    f = length(tangle)
+    t = tangle.n_crossings()
+    u = f - t
 
 if __name__ == "__main__":
     # t = Tangle([[1,-2], [2,3], [-1,-3]])
     # t = Tangle([(1,4), (2,3), (-1,-3), (-2,-4)])
     t = Tangle([(1,-6), (2,5), (3,4), (6,-1), (-2, -4), (-3,-5)])
-    t.compute_node_polarity()
-    print(repr(t))
-    t.merge(Edge(t[2], t[5]), Edge(t[-3], t[-5]))
-    print(repr(t))
+    print(t.tfy())
+    print(t.tfy().n_crossings())
+    print(length(t))
