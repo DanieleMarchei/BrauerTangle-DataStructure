@@ -86,7 +86,6 @@ class Edge:
     number_of_crossings : int = field(init=False, compare=False, hash=False)
     
     def __post_init__(self) -> None:
-
         self.number_of_crossings = 0
 
         if self.is_hook() and self.e2 < self.e1:
@@ -179,7 +178,7 @@ class Tangle:
         
         self.is_node_polarity_computed = False
         self.are_edge_crossings_computed = False
-    
+
     def compute_edge_crossings(self) -> None:
         if self.are_edge_crossings_computed: return
 
@@ -260,6 +259,16 @@ class Tangle:
             edges_tfy.append((node1.id, node2.id))
         
         return Tangle(edges_tfy)
+
+    def n_crossings(self) -> int:
+        if not self.are_edge_crossings_computed:
+            self.compute_edge_crossings()
+            
+        double_n_crossings = 0
+        for _, other_crossings in self.crossings:
+            double_n_crossings += len(other_crossings)
+        
+        return double_n_crossings // 2
 
     def compose_t(self, i : int) -> None:
 
@@ -378,11 +387,14 @@ class Tangle:
         
         return str(edge_list)
 
+def factorize(tangle : Tangle) -> list:
+    pass
+
 if __name__ == "__main__":
     # t = Tangle([[1,-2], [2,3], [-1,-3]])
     # t = Tangle([(1,4), (2,3), (-1,-3), (-2,-4)])
     t = Tangle([(1,-6), (2,5), (3,4), (6,-1), (-2, -4), (-3,-5)])
     t.compute_node_polarity()
     print(repr(t))
-    t.merge(Edge(Node(2), Node(5)), Edge(Node(-3), Node(-5)))
+    t.merge(Edge(t[2], t[5]), Edge(t[-3], t[-5]))
     print(repr(t))
