@@ -169,16 +169,13 @@ class Tangle:
         self.nodes = {i : Node(i) for edge in inv for i in edge}
         self.edges = {(e1,e2) : Edge(self.nodes[e1],self.nodes[e2]) for e1,e2 in inv}
         self.polarities = {}
+        self.crossings = {}
         self.max_pos_polarities = 0
         self.max_neg_polarities = 0
         self.node_to_edge = {}
         for e1,e2 in inv:
             self.node_to_edge[self.nodes[e1]] = (self.edges[(e1,e2)], 0)
             self.node_to_edge[self.nodes[e2]] = (self.edges[(e1,e2)], 1)
-        
-        self.edge_to_nodes = {}
-        for t,e in self.edges.items():
-            self.edge_to_nodes[e] = (self.nodes[t[0]], self.nodes[t[1]])
         
         self.is_node_polarity_computed = False
         self.are_edge_crossings_computed = False
@@ -193,6 +190,13 @@ class Tangle:
                 if (edge1, edge2) in done or (edge2, edge1) in done: continue 
 
                 if edge1.crosses_with(edge2):
+                    if edge1 not in self.crossings:
+                        self.crossings[edge1] = set()
+                    if edge2 not in self.crossings:
+                        self.crossings[edge2] = set()
+                    
+                    self.crossings[edge1].add(edge2)
+                    self.crossings[edge2].add(edge1)
                     edge1.incr_crossings()
                     edge2.incr_crossings()
                 
@@ -286,9 +290,73 @@ class Tangle:
         # because if they had different polarities then they should have not been swapped
         if edge_i[idx_i].polarity.sign != edge_i_1[idx_i_1].polarity.sign:
             edge_i[idx_i].polarity, edge_i_1[idx_i_1].polarity =  edge_i_1[idx_i_1].polarity, edge_i[idx_i].polarity
-        
+    
     def merge(self, edge1 : Edge, edge2 : Edge) -> None:
-        pass
+        # assume that at least one edge is a hook
+        assert(edge1.is_hook() or edge2.is_hook())
+
+        # decrease the crossing number of all edges crossing edge1 and edge2
+        if edge1 in self.crossings:
+            for other_edge in self.crossings[edge1]:
+                other_edge.decr_crossings()
+                self.crossings[other_edge].remove(edge1)
+        
+        if edge2 in self.crossings:
+            for other_edge in self.crossings[edge2]:
+                other_edge.decr_crossings()
+                self.crossings[other_edge].remove(edge2)
+
+        # remove old edges
+        del self.edges[edge1.to_tuple()]
+        del self.edges[edge2.to_tuple()]
+
+        # delete reference from node to edge
+        del self.node_to_edge[edge1.e1]
+        del self.node_to_edge[edge1.e2]
+        del self.node_to_edge[edge2.e1]
+        del self.node_to_edge[edge2.e2]
+
+        # merge
+        new_edge1 = Edge(edge1.e1, edge2.e1)
+        new_edge2 = Edge(edge1.e2, edge2.e2)
+        self.edges[(edge1.e1, edge2.e1)] = new_edge1
+        self.edges[(edge1.e2, edge2.e2)] = new_edge2
+
+        # add reference to node to edge
+        self.node_to_edge[new_edge1.e1] = (new_edge1, 0)
+        self.node_to_edge[new_edge1.e2] = (new_edge1, 1)
+        self.node_to_edge[new_edge2.e1] = (new_edge2, 0)
+        self.node_to_edge[new_edge2.e2] = (new_edge2, 1)
+
+        # update crossings
+        for other_edge in self.edges.values():
+            if other_edge == new_edge1: continue
+            if not other_edge.crosses_with(new_edge1): continue
+            
+            other_edge.incr_crossings()
+            new_edge1.incr_crossings()
+            if other_edge not in self.crossings:
+                self.crossings[other_edge] = set()
+            if new_edge1 not in self.crossings:
+                self.crossings[new_edge1] = set()
+            self.crossings[other_edge].add(new_edge1)
+            self.crossings[new_edge1].add(other_edge)
+
+        for other_edge in self.edges.values():
+            if other_edge == new_edge2: continue
+            if not other_edge.crosses_with(new_edge2): continue
+            
+            other_edge.incr_crossings()
+            new_edge2.incr_crossings()
+            if other_edge not in self.crossings:
+                self.crossings[other_edge] = set()
+            if new_edge2 not in self.crossings:
+                self.crossings[new_edge2] = set()
+            self.crossings[other_edge].add(new_edge2)
+            self.crossings[new_edge2].add(other_edge)
+        
+        self.are_edge_crossings_computed = True
+        self.compute_node_polarity()
 
     def inv(self):
         edge_list = []
@@ -296,6 +364,9 @@ class Tangle:
             edge_list.append(edge.to_tuple())
         
         return edge_list
+
+    def __getitem__(self, index):
+        return self.nodes[index]
 
     def __str__(self) -> str:
         return str(self.inv())
@@ -309,8 +380,9 @@ class Tangle:
 
 if __name__ == "__main__":
     # t = Tangle([[1,-2], [2,3], [-1,-3]])
-    t = Tangle([(1,4), (2,3), (-1,-3), (-2,-4)])
+    # t = Tangle([(1,4), (2,3), (-1,-3), (-2,-4)])
+    t = Tangle([(1,-6), (2,5), (3,4), (6,-1), (-2, -4), (-3,-5)])
     t.compute_node_polarity()
     print(repr(t))
-    t.compose_t(1)
+    t.merge(Edge(Node(2), Node(5)), Edge(Node(-3), Node(-5)))
     print(repr(t))
