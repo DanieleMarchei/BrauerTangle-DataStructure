@@ -170,7 +170,7 @@ class Tangle:
         self.N = len(inv)
         self.nodes = {i : Node(i) for edge in inv for i in edge}
         self.edges = {(e1,e2) : Edge(self.nodes[e1],self.nodes[e2]) for e1,e2 in inv}
-        self.polarities = {}
+        self.polarity_to_nodes = {}
         self.crossings = {}
         self.max_pos_polarities = 0
         self.max_neg_polarities = 0
@@ -242,10 +242,10 @@ class Tangle:
                 else:
                     neg_counter += 1
                 
-                if node.polarity not in self.polarities:
-                    self.polarities[node.polarity] = []
+                if node.polarity not in self.polarity_to_nodes:
+                    self.polarity_to_nodes[node.polarity] = []
                             
-                self.polarities[node.polarity].append(node)
+                self.polarity_to_nodes[node.polarity].append(node)
 
             
         self.max_pos_polarities = pos_counter
@@ -260,7 +260,7 @@ class Tangle:
             if edge.is_generated_only_by_Ts():
                 edges_tfy.append(edge.to_tuple())
         
-        for node1, node2 in self.polarities.values():
+        for node1, node2 in self.polarity_to_nodes.values():
             edges_tfy.append((node1.id, node2.id))
         
         return Tangle(edges_tfy)
@@ -304,6 +304,8 @@ class Tangle:
         # because if they had different polarities then they should have not been swapped
         if edge_i[idx_i].polarity.sign != edge_i_1[idx_i_1].polarity.sign:
             edge_i[idx_i].polarity, edge_i_1[idx_i_1].polarity =  edge_i_1[idx_i_1].polarity, edge_i[idx_i].polarity
+        
+        # TODO: UPDATE self.polarity_to_nodes
     
     def merge(self, edge1 : Edge, edge2 : Edge) -> None:
         # assume that at least one edge is a hook
@@ -394,17 +396,49 @@ class Tangle:
 
 
 class HasseDiagram:
-    def __init__(self, graph) -> None:
-        self.gaph = graph
+    def __init__(self, graph : nx.DiGraph, tangle : Tangle) -> None:
+        self.graph = graph
+        self.invers_graph = nx.DiGraph([c,p] for p,c in self.graph.edges)
+        # self.min_lvl = 0
+        # attr_lvl = nx.get_node_attributes(self.graph, "lvl")
+
+        # self.max_lvl = max(attr_lvl.items(), key = lambda x : x[1])[1]
+
+        self.outer_nodes = {node for node in self.graph.nodes() \
+                            if len(self.graph.in_edges(node)) == 0 or len(self.graph.out_edges(node)) == 0}
+        
+        attr_idx = nx.get_node_attributes(self.graph, "idx")
+        u_nodes = {}
+        for node in self.outer_nodes:
+            idx = attr_idx[node]
+            tangle_node = tangle[idx]
+            tangle_edge = tangle.node_to_edge[tangle_node][0]
+            if tangle_edge.is_hook() and tangle_edge.size() == 1:
+                u_nodes[node] = "U"
+        
+        nx.set_node_attributes(self.graph, u_nodes, "prime")
+
+
+        
+        attr_prime = nx.get_node_attributes(self.graph, "prime")
+        self.t_outer_nodes = {node for node in self.outer_nodes if attr_prime[node] == "T"}
+        self.u_outer_nodes = {node for node in self.outer_nodes if attr_prime[node] == "U"}
+
         self.pos = {}
 
         for node, data in graph.nodes.items():
             idx = data["idx"]
             lvl = data["lvl"]
-            self.pos[node] = np.array([idx, lvl])
+            self.pos[node] = np.array([idx, -lvl])
     
+    def parents_of(self, node : str):
+        return self.invers_graph.neighbors(node)
+
+    def pop(self):
+        pass
+
     def draw(self):
-        nx.draw(self.graph, self.pos)
+        nx.draw(self.graph, self.pos, with_labels = True)
         plt.show()
 
 
@@ -426,12 +460,11 @@ def factorize_T(tangle: Tangle) -> list:
 
     return factor_list
 
-def T_factor_list_to_hasse(factors : list[str]) -> HasseDiagram:
+def T_factor_list_to_hasse_graph(factors : list[str]) -> nx.DiGraph:
     def get_idx(f : str):
         return int(f.replace("T",""))
 
-    graph = nx.Graph()
-    pos = {}
+    graph = nx.DiGraph()
     node_name = f"{factors[0]} - 0"
     graph.add_node(node_name, prime = "T", idx = get_idx(factors[0]), lvl = 0)
     lvls = {
@@ -458,12 +491,12 @@ def T_factor_list_to_hasse(factors : list[str]) -> HasseDiagram:
     for lvl in range(1, len(lvls)):
         for idx, node in lvls[lvl].items():
             if idx - 1 in lvls[lvl - 1]:
-                graph.add_edge(node, lvls[lvl - 1][idx - 1])
+                graph.add_edge(lvls[lvl - 1][idx - 1], node)
             
             if idx + 1 in lvls[lvl - 1]:
-                graph.add_edge(node, lvls[lvl - 1][idx + 1])    
+                graph.add_edge(lvls[lvl - 1][idx + 1], node)    
 
-    return HasseDiagram(graph)
+    return graph
 
 def length(tangle: Tangle) -> int:
     return tangle.tfy().n_crossings()
@@ -477,8 +510,11 @@ if __name__ == "__main__":
     # t = Tangle([[1,-2], [2,3], [-1,-3]])
     # t = Tangle([(1,4), (2,3), (-1,-3), (-2,-4)])
     t = Tangle([(1,-6), (2,5), (3,4), (6,-1), (-2, -4), (-3,-5)])
+    t.compose_t(3)
+    print(t)
     factors_t = factorize_T(t.tfy())
     print(factors_t)
-    hasse = T_factor_list_to_hasse(factors_t)
-    print(hasse)
-    print(factors_t)
+    graph = T_factor_list_to_hasse_graph(factors_t)
+    hasse = HasseDiagram(graph, t)
+    hasse.draw()
+    plt.show()
