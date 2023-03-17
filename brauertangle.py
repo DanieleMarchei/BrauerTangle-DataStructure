@@ -2,6 +2,7 @@ from __future__ import annotations
 from enum import Enum
 from dataclasses import dataclass, field
 from collections.abc import Iterable
+import networkx as nx
 
 class Sign(Enum):
     positive = 1
@@ -389,6 +390,51 @@ class Tangle:
         
         return str(edge_list)
 
+
+class HasseDiagram:
+    def __init__(self, graph) -> None:
+        self.gaph = graph
+
+
+def factorize_T(tangle: Tangle) -> list:
+    assert(all([edge.is_transversal() for edge in tangle.edges.values()]))
+    inv = sorted(tangle.inv(), key = lambda e : e[0])
+    b = [abs(e[1]) for e in inv]
+    factor_list = []
+    for j in range(len(b)):
+        skip_one = False
+        for i in range(len(b)-1):
+            if skip_one:
+                skip_one = False 
+                continue
+            if b[i] > b[i + 1]:
+                b[i], b[i + 1] = b[i + 1], b[i]
+                factor_list.append(f"T{i+1}")
+                skip_one = True
+
+    return factor_list
+
+def T_factor_list_to_hasse(factors : list[str]) -> HasseDiagram:
+    def get_idx(f : str):
+        return int(f.replace("T",""))
+    
+
+    graph = nx.Graph()
+    graph.add_node(f"{factors[0]} - 0", prime = "T", idx = get_idx(factors[0]), lvl = 0)
+
+    prev_idx = get_idx(factors[0])
+    lvl = 0
+    for f in factors[1:]:
+        idx = get_idx(f)
+        if idx < prev_idx:
+            lvl += 1
+
+        node_name = f"{f} - {lvl}"
+        graph.add_node(node_name, prime = "T", idx = idx, lvl = lvl)
+        prev_idx = idx    
+
+    return HasseDiagram(graph)
+
 def length(tangle: Tangle) -> int:
     return tangle.tfy().n_crossings()
 
@@ -401,6 +447,8 @@ if __name__ == "__main__":
     # t = Tangle([[1,-2], [2,3], [-1,-3]])
     # t = Tangle([(1,4), (2,3), (-1,-3), (-2,-4)])
     t = Tangle([(1,-6), (2,5), (3,4), (6,-1), (-2, -4), (-3,-5)])
-    print(t.tfy())
-    print(t.tfy().n_crossings())
-    print(length(t))
+    factors_t = factorize_T(t.tfy())
+    print(factors_t)
+    hasse = T_factor_list_to_hasse(factors_t)
+    print(hasse)
+    print(factors_t)
