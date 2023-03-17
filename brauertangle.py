@@ -3,6 +3,8 @@ from enum import Enum
 from dataclasses import dataclass, field
 from collections.abc import Iterable
 import networkx as nx
+import numpy as np
+import matplotlib.pyplot as plt
 
 class Sign(Enum):
     positive = 1
@@ -394,6 +396,16 @@ class Tangle:
 class HasseDiagram:
     def __init__(self, graph) -> None:
         self.gaph = graph
+        self.pos = {}
+
+        for node, data in graph.nodes.items():
+            idx = data["idx"]
+            lvl = data["lvl"]
+            self.pos[node] = np.array([idx, lvl])
+    
+    def draw(self):
+        nx.draw(self.graph, self.pos)
+        plt.show()
 
 
 def factorize_T(tangle: Tangle) -> list:
@@ -417,21 +429,39 @@ def factorize_T(tangle: Tangle) -> list:
 def T_factor_list_to_hasse(factors : list[str]) -> HasseDiagram:
     def get_idx(f : str):
         return int(f.replace("T",""))
-    
 
     graph = nx.Graph()
-    graph.add_node(f"{factors[0]} - 0", prime = "T", idx = get_idx(factors[0]), lvl = 0)
-
+    pos = {}
+    node_name = f"{factors[0]} - 0"
+    graph.add_node(node_name, prime = "T", idx = get_idx(factors[0]), lvl = 0)
+    lvls = {
+        0 : {
+            get_idx(factors[0]) : node_name
+        }
+    }
     prev_idx = get_idx(factors[0])
     lvl = 0
     for f in factors[1:]:
         idx = get_idx(f)
         if idx < prev_idx:
             lvl += 1
+        
 
         node_name = f"{f} - {lvl}"
+        if lvl not in lvls:
+            lvls[lvl] = {}
+
+        lvls[lvl][idx] = node_name
         graph.add_node(node_name, prime = "T", idx = idx, lvl = lvl)
-        prev_idx = idx    
+        prev_idx = idx
+
+    for lvl in range(1, len(lvls)):
+        for idx, node in lvls[lvl].items():
+            if idx - 1 in lvls[lvl - 1]:
+                graph.add_edge(node, lvls[lvl - 1][idx - 1])
+            
+            if idx + 1 in lvls[lvl - 1]:
+                graph.add_edge(node, lvls[lvl - 1][idx + 1])    
 
     return HasseDiagram(graph)
 
