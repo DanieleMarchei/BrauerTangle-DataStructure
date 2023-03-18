@@ -22,6 +22,13 @@ class Polarity:
     sign : Sign
     value : int
 
+    def __str__(self) -> str:
+        p = "+" if self.sign == Sign.positive else "-"
+        return f"{p}{self.value}"
+
+    def __repr__(self) -> str:
+        return str(self)
+
 @dataclass(unsafe_hash=True)
 class Node:
     id : int
@@ -278,7 +285,8 @@ class Tangle:
     def compose_t(self, i : int) -> None:
 
         if not self.is_node_polarity_computed:
-            self.compute_node_polarity() 
+            self.compute_node_polarity()
+        
 
         node_i = self.nodes[-i]
         edge_i, idx_i = self.node_to_edge[node_i]
@@ -286,6 +294,9 @@ class Tangle:
 
         node_i_1 = self.nodes[-(i + 1)]
         edge_i_1, idx_i_1 = self.node_to_edge[node_i_1]
+        
+        self.polarity_to_nodes[node_i.polarity].remove(node_i)
+        self.polarity_to_nodes[node_i_1.polarity].remove(node_i_1)
 
         # UPDATE CROSSINGS
         # if the edges cross, then reduce their crossing number. Decrease it otherwise
@@ -306,6 +317,8 @@ class Tangle:
             edge_i[idx_i].polarity, edge_i_1[idx_i_1].polarity =  edge_i_1[idx_i_1].polarity, edge_i[idx_i].polarity
         
         # TODO: UPDATE self.polarity_to_nodes
+        self.polarity_to_nodes[edge_i[idx_i].polarity].append(edge_i[idx_i])
+        self.polarity_to_nodes[edge_i_1[idx_i_1].polarity].append(edge_i_1[idx_i_1])
     
     def merge(self, edge1 : Edge, edge2 : Edge) -> None:
         # assume that at least one edge is a hook
