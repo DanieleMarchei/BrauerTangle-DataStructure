@@ -287,7 +287,7 @@ class Tangle:
         
         return double_n_crossings // 2
 
-    def compose_t(self, i : int) -> None:
+    def compose_t_update(self, i : int) -> None:
 
         if not self.is_node_polarity_computed:
             self.compute_node_polarity()
@@ -325,7 +325,7 @@ class Tangle:
         self.polarity_to_nodes[edge_i[idx_i].polarity].append(edge_i[idx_i])
         self.polarity_to_nodes[edge_i_1[idx_i_1].polarity].append(edge_i_1[idx_i_1])
     
-    def merge(self, edge1 : Edge, edge2 : Edge) -> None:
+    def merge_update(self, edge1 : Edge, edge2 : Edge) -> None:
         # assume that at least one edge is a hook
         assert(edge1.is_hook() or edge2.is_hook())
 
@@ -391,6 +391,90 @@ class Tangle:
         
         self.are_edge_crossings_computed = True
         self.compute_node_polarity()
+
+    def merge(self, edge1 : Edge, edge2 : Edge) -> Tangle:
+        # assume that at least one edge is a hook
+        assert(edge1.is_hook() or edge2.is_hook())
+
+        copy_tangle = self.copy()
+
+        # decrease the crossing number of all edges crossing edge1 and edge2
+        if edge1 in copy_tangle.crossings:
+            for other_edge in copy_tangle.crossings[edge1]:
+                other_edge.decr_crossings()
+                copy_tangle.crossings[other_edge].remove(edge1)
+        
+        if edge2 in copy_tangle.crossings:
+            for other_edge in copy_tangle.crossings[edge2]:
+                other_edge.decr_crossings()
+                copy_tangle.crossings[other_edge].remove(edge2)
+
+        # remove old edges
+        del copy_tangle.edges[edge1.to_tuple()]
+        del copy_tangle.edges[edge2.to_tuple()]
+
+        # delete reference from node to edge
+        del copy_tangle.node_to_edge[edge1.e1]
+        del copy_tangle.node_to_edge[edge1.e2]
+        del copy_tangle.node_to_edge[edge2.e1]
+        del copy_tangle.node_to_edge[edge2.e2]
+
+        # merge
+        new_edge1 = Edge(edge1.e1, edge2.e1)
+        new_edge2 = Edge(edge1.e2, edge2.e2)
+        copy_tangle.edges[(edge1.e1, edge2.e1)] = new_edge1
+        copy_tangle.edges[(edge1.e2, edge2.e2)] = new_edge2
+
+        # add reference to node to edge
+        copy_tangle.node_to_edge[new_edge1.e1] = (new_edge1, 0)
+        copy_tangle.node_to_edge[new_edge1.e2] = (new_edge1, 1)
+        copy_tangle.node_to_edge[new_edge2.e1] = (new_edge2, 0)
+        copy_tangle.node_to_edge[new_edge2.e2] = (new_edge2, 1)
+
+        # update crossings
+        for other_edge in copy_tangle.edges.values():
+            if other_edge == new_edge1: continue
+            if not other_edge.crosses_with(new_edge1): continue
+            
+            other_edge.incr_crossings()
+            new_edge1.incr_crossings()
+            if other_edge not in copy_tangle.crossings:
+                copy_tangle.crossings[other_edge] = set()
+            if new_edge1 not in copy_tangle.crossings:
+                copy_tangle.crossings[new_edge1] = set()
+            copy_tangle.crossings[other_edge].add(new_edge1)
+            copy_tangle.crossings[new_edge1].add(other_edge)
+
+        for other_edge in copy_tangle.edges.values():
+            if other_edge == new_edge2: continue
+            if not other_edge.crosses_with(new_edge2): continue
+            
+            other_edge.incr_crossings()
+            new_edge2.incr_crossings()
+            if other_edge not in copy_tangle.crossings:
+                copy_tangle.crossings[other_edge] = set()
+            if new_edge2 not in copy_tangle.crossings:
+                copy_tangle.crossings[new_edge2] = set()
+            copy_tangle.crossings[other_edge].add(new_edge2)
+            copy_tangle.crossings[new_edge2].add(other_edge)
+        
+        copy_tangle.are_edge_crossings_computed = True
+        copy_tangle.compute_node_polarity()
+
+    def copy(self):
+        copy_tangle = Tangle([])
+        copy_tangle.N = self.N
+        copy_tangle.nodes = self.nodes.copy()
+        copy_tangle.edges = self.edges.copy()
+        copy_tangle.polarity_to_nodes = self.polarity_to_nodes.copy()
+        copy_tangle.crossings = self.crossings.copy()
+        copy_tangle.max_pos_polarities = self.max_pos_polarities
+        copy_tangle.max_neg_polarities = self.max_neg_polarities
+        copy_tangle.node_to_edge = self.node_to_edge.copy()
+        
+        copy_tangle.is_node_polarity_computed = self.is_node_polarity_computed
+        copy_tangle.are_edge_crossings_computed = self.are_edge_crossings_computed
+        return copy_tangle
 
     def inv(self):
         edge_list = []
@@ -588,7 +672,7 @@ def factorize(tangle : Tangle) -> list:
         prime = node["prime"]
         idx = node["idx"]
         if prime == "T":
-            tangle.compose_t(idx)
+            tangle.compose_t_update(idx)
             t -= 1
             yield f"T{idx}"
         else:
@@ -599,7 +683,7 @@ if __name__ == "__main__":
     # t = Tangle([[1,-2], [2,3], [-1,-3]])
     # t = Tangle([(1,4), (2,3), (-1,-3), (-2,-4)])
     t = Tangle([(1,-6), (2,5), (3,4), (6,-1), (-2, -4), (-3,-5)])
-    t.compose_t(3)
+    t.compose_t_update(3)
     print(t)
     factors_t = factorize_T(t.tfy())
     print(factors_t)
