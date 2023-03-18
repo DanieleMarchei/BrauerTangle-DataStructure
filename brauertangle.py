@@ -17,6 +17,11 @@ class EdgeType(Enum):
     positive_transversal = 4
     negative_transversal = 5
 
+class HasseOuterNode(Enum):
+    upper = 1
+    lower = 2
+    singleton = 3
+
 @dataclass(unsafe_hash=True)
 class Polarity:
     sign : Sign
@@ -417,21 +422,31 @@ class HasseDiagram:
 
         # self.max_lvl = max(attr_lvl.items(), key = lambda x : x[1])[1]
 
-        self.outer_nodes = {node for node in self.graph.nodes() \
-                            if len(self.graph.in_edges(node)) == 0 or len(self.graph.out_edges(node)) == 0}
+        self.outer_nodes = {}
+        outer_node_types = {
+            (True, False): HasseOuterNode.upper,
+            (False, True): HasseOuterNode.lower,
+            (True, True): HasseOuterNode.singleton
+        }
+
+        for node in self.graph.nodes():
+            node_type = (len(self.graph.in_edges(node)) == 0, len(self.graph.out_edges(node)) == 0)
+            if node_type in outer_node_types:
+                node_type = outer_node_types[node_type]
+                self.outer_nodes[node] = node_type
         
         attr_idx = nx.get_node_attributes(self.graph, "idx")
         u_nodes = {}
         for node in self.outer_nodes:
             idx = attr_idx[node]
+            if self.outer_nodes[node] == HasseOuterNode.lower:
+                idx = -idx
             tangle_node = tangle[idx]
             tangle_edge = tangle.node_to_edge[tangle_node][0]
             if tangle_edge.is_hook() and tangle_edge.size() == 1:
                 u_nodes[node] = "U"
         
         nx.set_node_attributes(self.graph, u_nodes, "prime")
-
-
         
         attr_prime = nx.get_node_attributes(self.graph, "prime")
         self.t_outer_nodes = {node for node in self.outer_nodes if attr_prime[node] == "T"}
