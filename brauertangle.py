@@ -416,14 +416,15 @@ class Tangle:
 class HasseDiagram:
     def __init__(self, graph : nx.DiGraph, tangle : Tangle) -> None:
         self.graph = graph
-        self.invers_graph = nx.DiGraph([c,p] for p,c in self.graph.edges)
+        self.tangle = tangle
+        self.inverse_graph = nx.DiGraph([c,p] for p,c in self.graph.edges)
         # self.min_lvl = 0
         # attr_lvl = nx.get_node_attributes(self.graph, "lvl")
 
         # self.max_lvl = max(attr_lvl.items(), key = lambda x : x[1])[1]
 
         self.outer_nodes = {}
-        outer_node_types = {
+        self._outer_node_types = {
             (True, False): HasseOuterNode.upper,
             (False, True): HasseOuterNode.lower,
             (True, True): HasseOuterNode.singleton
@@ -431,8 +432,8 @@ class HasseDiagram:
 
         for node in self.graph.nodes():
             node_type = (len(self.graph.in_edges(node)) == 0, len(self.graph.out_edges(node)) == 0)
-            if node_type in outer_node_types:
-                node_type = outer_node_types[node_type]
+            if node_type in self._outer_node_types:
+                node_type = self._outer_node_types[node_type]
                 self.outer_nodes[node] = node_type
         
         attr_idx = nx.get_node_attributes(self.graph, "idx")
@@ -441,8 +442,8 @@ class HasseDiagram:
             idx = attr_idx[node]
             if self.outer_nodes[node] == HasseOuterNode.lower:
                 idx = -idx
-            tangle_node = tangle[idx]
-            tangle_edge = tangle.node_to_edge[tangle_node][0]
+            tangle_node = self.tangle[idx]
+            tangle_edge = self.tangle.node_to_edge[tangle_node][0]
             if tangle_edge.is_hook() and tangle_edge.size() == 1:
                 u_nodes[node] = "U"
         
@@ -458,12 +459,58 @@ class HasseDiagram:
             idx = data["idx"]
             lvl = data["lvl"]
             self.pos[node] = np.array([idx, -lvl])
-    
+
     def parents_of(self, node : str):
-        return self.invers_graph.neighbors(node)
+        return self.inverse_graph.neighbors(node)
+
+    def remove(self, node):
+        self.graph.remove_node(node)
+        self.inverse_graph.remove_node(node)
+        del self.outer_nodes[node]
 
     def pop(self):
-        pass
+        if len(self.t_outer_nodes) > 0:
+            node = self.t_outer_nodes.pop()
+        else:
+            node = self.u_outer_nodes.pop()
+
+        parents = self.parents_of(node)
+        self.remove(node)
+
+        new_outer_nodes = {}
+        for p_node in parents:
+            node_type = (len(self.graph.in_edges(p_node)) == 0, len(self.graph.out_edges(p_node)) == 0)
+            if node_type in self._outer_node_types:
+                node_type = self._outer_node_types[node_type]
+                new_outer_nodes[p_node] = node_type
+        
+        attr_idx = nx.get_node_attributes(self.graph, "idx")
+        new_u_nodes = {}
+        new_t_nodes = set()
+        for node in new_outer_nodes:
+            idx = attr_idx[node]
+            if new_outer_nodes[node] == HasseOuterNode.lower:
+                idx = -idx
+            tangle_node = self.tangle[idx]
+            tangle_edge = self.tangle.node_to_edge[tangle_node][0]
+            if tangle_edge.is_hook() and tangle_edge.size() == 1:
+                new_u_nodes[node] = "U"
+            else:
+                new_t_nodes.add(node)
+                
+        nx.set_node_attributes(self.graph, new_u_nodes, "prime")
+
+        for p_node in new_outer_nodes:
+            self.outer_nodes[p_node] = node_type
+        
+        self.u_outer_nodes.update(new_u_nodes.keys())
+        self.t_outer_nodes.update(new_t_nodes)
+
+
+        return self.graph.nodes(node, data = True)
+    
+    def size(self):
+        return len(self.graph.nodes)
 
     def draw(self):
         nx.draw(self.graph, self.pos, with_labels = True)
@@ -533,6 +580,20 @@ def factorize(tangle : Tangle) -> list:
     f = length(tangle)
     t = tangle.n_crossings()
     u = f - t
+    t_factors = factorize_T(tangle.tfy())
+    graph = T_factor_list_to_hasse_graph(t_factors)
+    hasse = HasseDiagram(graph, tangle)
+    while hasse.size() > 0:
+        node = hasse.pop()
+        prime = node["prime"]
+        idx = node["idx"]
+        if prime == "T":
+            tangle.compose_t(idx)
+            t -= 1
+            yield f"T{idx}"
+        else:
+            u -= 1
+
 
 if __name__ == "__main__":
     # t = Tangle([[1,-2], [2,3], [-1,-3]])
